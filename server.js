@@ -4,6 +4,8 @@ const tmi = require('tmi.js');
 
 require('dotenv').config();
 
+const fs = require('fs');
+
 //Define configuration options
 const opts = {
   options: { debug: true },
@@ -19,6 +21,23 @@ const opts = {
     process.env.CHANNEL_NAME
   ]
 };
+let customChannelCommands = []
+
+fs.readFile(`${process.env.CHANNEL_NAME}Commands.txt`, 'utf8', (err, data) => {
+  if (err) throw err;
+  console.log(data);
+  let dividedCommands = data.split('|||');
+  let count = 0;
+  let processedCommands = [];
+  while(count < dividedCommands.length){
+    let newCommand = {command: `!${dividedCommands[count]}`, text: dividedCommands[count + 1]};
+    processedCommands.push(newCommand);
+    count = count + 2;
+  }
+  customChannelCommands = processedCommands;
+  console.log(processedCommands);
+});
+
 
 // Create a client with our options
 const client = new tmi.client(opts);
@@ -44,10 +63,37 @@ function onMessageHandler (target, context, msg, self) {
     console.log(`* Executed ${commandName} command`);
   }
   else if (commandName === '!hello'){
-    client.say(target, `Hello, ${target}`);
+    client.say(target, `Hello, ${context.username}`);
+    console.log(context);
+    console.log(msg);
+  }
+  else if (commandName.includes('!add')){
+    if (context.badges.broadcaster === '1'){
+      let indexOfFirstSpace = msg.indexOf(' ');
+      let newCommandName = msg.slice(indexOfFirstSpace + 1, msg.indexOf(' ', indexOfFirstSpace + 1));
+      let newCommandText = msg.slice(msg.indexOf(' ', indexOfFirstSpace + 1) + 1);
+
+      console.log('The name of the new command: ' + newCommandName)
+      console.log('The text of the new command: ' + newCommandText)
+      fs.appendFile(`${process.env.CHANNEL_NAME}Commands.txt`, `${newCommandName}|||${newCommandText}|||`, function (err) {
+        if (err) throw err;
+        console.log('Command Saved!');
+        let newCommand = {command: `!${newCommandName}`, text: newCommandText};
+        customChannelCommands.push(newCommand);
+      });
+    }
   }
   else {
-    console.log(`* Unknown command ${commandName}`);
+    let commandDone = false;
+    customChannelCommands.forEach(command => {
+      if (commandName === command.command){
+        client.say(target, command.text);
+        commandDone = true;
+      }
+    });
+    if(commandDone === false){
+      console.log('Unknown Command')
+    }
   }
 }
 // Function called when the "dice" command is issued
